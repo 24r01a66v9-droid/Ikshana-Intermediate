@@ -3,8 +3,6 @@ import { ArrowRight, Heart, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export default function Hero() {
-  // Reveal the motto as 3 complete text parts.
-  // Each part appears at once; the + and = symbols are shown between them.
   const mottoSteps = [
     "your little help",
     "our passion to help",
@@ -50,7 +48,7 @@ export default function Hero() {
                 transition={{ delay: 0.15, duration: 0.8 }}
               >
                 <div className="relative mx-auto w-fit max-w-full px-4 sm:px-8">
-                  {/* Small hand-drawn style accent */}
+                  
                   <div
                     aria-hidden="true"
                     className="pointer-events-none absolute -left-7 top-2 h-10 w-10 sm:-left-2 sm:top-0 sm:h-12 sm:w-12"
@@ -115,7 +113,6 @@ export default function Hero() {
                     </span>
                   </h1>
 
-                  {/* Subtle dotted flourish */}
                   <div
                     aria-hidden="true"
                     className="pointer-events-none absolute -right-2 bottom-0 h-10 w-14 sm:-right-5 sm:h-16 sm:w-24"
@@ -126,7 +123,6 @@ export default function Hero() {
                 </div>
               </motion.div>
 
-              {/* Motto */}
               <motion.div
                 initial={{ y: 24, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
@@ -147,7 +143,7 @@ export default function Hero() {
                       className="
                         w-full
                         font-serif
-                        text-[1.65rem]
+                        text-[clamp(1.18rem,5.35vw,1.65rem)]
                         font-medium
                         italic
                         leading-[1.15]
@@ -158,7 +154,7 @@ export default function Hero() {
                         lg:text-[2.55rem]
                       "
                     >
-                      {/* Desktop/tablet: keep the complete motto on one line. */}
+                      
                       <div className="hidden w-full items-center justify-center gap-3 sm:gap-5 md:flex">
                         {mottoSteps.map((step, index) => {
                           const isVisible = index <= mottoStepIndex;
@@ -198,10 +194,8 @@ export default function Hero() {
                         })}
                       </div>
 
-                      {/* Mobile: use two lines so the complete motto always fits.
-                          The final "= someone's hope" moves to the second line. */}
                       <div className="flex w-full flex-col items-center justify-center gap-3 px-1 text-center md:hidden">
-                        <div className="flex w-full flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
+                        <div className="flex w-full flex-nowrap items-center justify-center gap-x-2 px-0.5 max-[380px]:gap-x-1">
                           <motion.span
                             initial={false}
                             animate={{
@@ -209,7 +203,7 @@ export default function Hero() {
                               y: mottoStepIndex >= 0 ? 0 : 8,
                             }}
                             transition={{ duration: 0.2 }}
-                            className="shrink-0"
+                            className="shrink-0 whitespace-nowrap"
                           >
                             {mottoSteps[0]}
                           </motion.span>
@@ -294,7 +288,6 @@ export default function Hero() {
                 </div>
               </motion.div>
 
-              {/* Description */}
               <motion.p
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
@@ -306,7 +299,6 @@ export default function Hero() {
                 responsibility.
               </motion.p>
 
-              {/* Actions */}
               <motion.div
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}

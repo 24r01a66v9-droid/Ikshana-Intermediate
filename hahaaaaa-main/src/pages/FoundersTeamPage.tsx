@@ -63,15 +63,12 @@ const createCroppedImageFile = async (
 ): Promise<Blob> => {
   const image = new Image();
 
-  // Request CORS only when the source is actually cross-origin. Blob/data
-  // URLs and same-origin images can be drawn directly onto the canvas.
   try {
     const imageUrl = new URL(imageSrc, window.location.href);
     if (imageUrl.origin !== window.location.origin) {
       image.crossOrigin = "anonymous";
     }
   } catch {
-    // Browser-supported blob/data URLs do not need crossOrigin.
   }
 
   image.src = imageSrc;
@@ -421,7 +418,6 @@ function ImageCropperModal({ image, onCancel, onConfirm }: ImageCropperModalProp
   );
 }
 
-
 export default function FoundersTeamPage() {
   const { user } = useAuth();
   const normalizedRole = user?.role?.toLowerCase();
@@ -438,8 +434,6 @@ export default function FoundersTeamPage() {
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-  // Keep the original image separate from the cropped preview so the admin
-  // can adjust the same original image repeatedly before saving.
   const [cropSourceImage, setCropSourceImage] = useState<string | null>(null);
   const [cropImage, setCropImage] = useState<string | null>(null);
   const [showCropper, setShowCropper] = useState(false);
@@ -585,8 +579,6 @@ export default function FoundersTeamPage() {
       return;
     }
 
-    // Every new upload becomes the ORIGINAL crop source. The cropped preview
-    // is never used as the source for a later adjustment.
     const imageUrl = URL.createObjectURL(file);
     revokeObjectUrl(cropSourceImage);
     revokeObjectUrl(previewImage);
@@ -601,8 +593,6 @@ export default function FoundersTeamPage() {
   };
 
   const handleCropConfirm = (file: File, previewUrl: string) => {
-    // Keep cropSourceImage untouched. Re-cropping always starts from the
-    // original uploaded/existing image.
     setUploadedFile(file);
     setPreviewImage(previewUrl);
     setShowCropper(false);
@@ -652,7 +642,6 @@ export default function FoundersTeamPage() {
 
       let dbIdToUpdate = editingMemberId;
 
-      // If editing id is non-numeric, try resolving a numeric DB id from server before submitting
       if (editingMemberId && !/^\d+$/.test(editingMemberId)) {
         try {
           const resp = await fetch("/api/leadership-members");
@@ -735,8 +724,6 @@ export default function FoundersTeamPage() {
     setCropImage(null);
     setShowAddMemberForm(true);
 
-    // Prepare the existing image as a local Blob URL so the browser can
-    // safely draw it onto a canvas when possible.
     setIsPreparingCropSource(true);
     try {
       const preparedSource = await prepareImageForCropping(member.image);
@@ -749,7 +736,6 @@ export default function FoundersTeamPage() {
   const handleDeleteMember = async (memberId: string) => {
     const targetMember = leadershipMembers.find((item) => item.id === memberId);
     
-    // Optimistic UI update
     const updated = leadershipMembers.filter((item) => item.id !== memberId);
     const sorted = updated.slice().sort((a, b) => a.displayOrder - b.displayOrder);
     setLeadershipMembers(sorted);
@@ -762,7 +748,6 @@ export default function FoundersTeamPage() {
         console.error("Failed to delete leadership member from DB", err);
       }
     } else if (targetMember) {
-      // If temporary string ID, find matching DB row by name and category and delete it
       try {
         const resp = await fetch("/api/leadership-members");
         if (resp.ok) {
@@ -800,7 +785,6 @@ export default function FoundersTeamPage() {
     setDraggedMemberId(null);
     setDropTargetId(null);
 
-    // Sync display orders with backend DB
     for (const member of reordered) {
       if (/^\d+$/.test(member.id)) {
         try {
@@ -819,8 +803,6 @@ export default function FoundersTeamPage() {
     }
   };
 
-
-
   const normalizeSocialUrl = (value: string) => {
     if (!value) return "";
     return value.startsWith("http://") || value.startsWith("https://") ? value : `https://${value}`;
@@ -832,7 +814,7 @@ export default function FoundersTeamPage() {
   const visibleMembers = (members: LeadershipMember[]) => members;
 
   const renderMemberGrid = (members: LeadershipMember[]) => (
-    <div className="grid grid-cols-2 gap-3 sm:gap-4 2xl:grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
       {members.map((person) => {
         const isDragged = draggedMemberId === person.id;
         const isDropTarget = dropTargetId === person.id;
@@ -1027,9 +1009,6 @@ export default function FoundersTeamPage() {
             ].map((section) => {
               const showAll = viewMoreByCategory[section.key as LeadershipCategory];
 
-              // Previous Board is grouped by tenure/batch.
-              // When collapsed, preview only the latest batch (up to 4 members).
-              // When expanded, show every batch and every member.
               const latestPreviousBoardBatch =
                 section.key === "previousBoard"
                   ? groupByTenure(section.members)[0]?.[1] ?? []
@@ -1052,7 +1031,7 @@ export default function FoundersTeamPage() {
                       <button
                         type="button"
                         onClick={() => toggleViewMore(section.key as LeadershipCategory)}
-                        className="inline-flex items-center gap-2 rounded-full border border-[#5B3FD4]/20 bg-[#5B3FD4]/5 px-4 py-2 text-sm font-semibold text-[#5B3FD4] transition hover:bg-[#5B3FD4] hover:text-white"
+                        className="ml-auto inline-flex shrink-0 items-center gap-2 rounded-full border border-[#5B3FD4]/20 bg-[#5B3FD4]/5 px-4 py-2 text-sm font-semibold text-[#5B3FD4] transition hover:bg-[#5B3FD4] hover:text-white"
                       >
                         {showAll
                           ? "Show Less"
