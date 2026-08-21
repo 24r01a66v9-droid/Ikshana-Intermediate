@@ -919,19 +919,28 @@ export default function FoundersTeamPage() {
     </div>
   );
 
+  const normalizeTenure = (value: string) => {
+    const cleaned = value.trim().replace(/[–—]/g, "-").replace(/\s+/g, " ");
+    const years = cleaned.match(/(20\d{2})\s*-\s*(20\d{2})/);
+
+    return years ? `${years[1]}-${years[2]}` : cleaned || "Unspecified";
+  };
+
   const groupByTenure = (members: LeadershipMember[]) => {
     const groups = new Map<string, LeadershipMember[]>();
 
     members.forEach((member) => {
-      const tenure = member.tenure?.trim() || "Unspecified";
+      const tenure = normalizeTenure(member.tenure);
       const existing = groups.get(tenure) ?? [];
       existing.push(member);
       groups.set(tenure, existing);
     });
 
-    return Array.from(groups.entries()).sort(([a], [b]) =>
-      b.localeCompare(a, undefined, { numeric: true, sensitivity: "base" }),
-    );
+    return Array.from(groups.entries()).sort(([a], [b]) => {
+      const aStart = Number(a.match(/20\d{2}/)?.[0] ?? 0);
+      const bStart = Number(b.match(/20\d{2}/)?.[0] ?? 0);
+      return bStart - aStart || b.localeCompare(a, undefined, { numeric: true, sensitivity: "base" });
+    });
   };
 
   const renderPreviousBoardByTenure = (members: LeadershipMember[]) => (
@@ -1009,15 +1018,14 @@ export default function FoundersTeamPage() {
             ].map((section) => {
               const showAll = viewMoreByCategory[section.key as LeadershipCategory];
 
-              const latestPreviousBoardBatch =
-                section.key === "previousBoard"
-                  ? groupByTenure(section.members)[0]?.[1] ?? []
-                  : [];
+              const previousBoardBatches =
+                section.key === "previousBoard" ? groupByTenure(section.members) : [];
+              const latestPreviousBoardBatch = previousBoardBatches[0]?.[1] ?? [];
 
               const visible = showAll
                 ? section.members
                 : section.key === "previousBoard"
-                  ? latestPreviousBoardBatch.slice(0, 4)
+                  ? latestPreviousBoardBatch
                   : section.members.slice(0, 4);
 
               return (
@@ -1031,7 +1039,7 @@ export default function FoundersTeamPage() {
                       <button
                         type="button"
                         onClick={() => toggleViewMore(section.key as LeadershipCategory)}
-                        className="ml-auto inline-flex shrink-0 items-center gap-2 rounded-full border border-[#5B3FD4]/20 bg-[#5B3FD4]/5 px-4 py-2 text-sm font-semibold text-[#5B3FD4] transition hover:bg-[#5B3FD4] hover:text-white"
+                        className="ml-auto inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-[#5B3FD4]/20 bg-[#5B3FD4]/5 px-4 py-2 text-sm font-semibold text-[#5B3FD4] transition hover:bg-[#5B3FD4] hover:text-white"
                       >
                         {showAll
                           ? "Show Less"

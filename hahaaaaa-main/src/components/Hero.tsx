@@ -22,10 +22,25 @@ export default function Hero() {
   return (
     <section className="relative overflow-hidden bg-[#fffcfc]">
       <div className="mx-auto w-[94%] max-w-7xl px-1 sm:px-2 lg:px-4">
-        <div className="relative min-h-[calc(100vh-110px)] overflow-hidden rounded-b-[2.5rem]">
+        <div className="relative min-h-[calc(100svh-110px)] overflow-hidden rounded-b-[2.5rem]">
           <div className="absolute left-0 top-0 h-1.5 w-full bg-brand-maroon/75" />
 
-          <div className="flex min-h-[calc(100vh-110px)] items-center justify-center py-24 sm:py-28 lg:py-32">
+          <div
+            className="
+              flex
+              min-h-[calc(100svh-110px)]
+              items-center
+              justify-center
+              py-24
+              sm:py-28
+              lg:py-32
+              [@media(min-height:800px)]:items-start
+              [@media(min-height:800px)]:pt-14
+              [@media(min-height:800px)]:pb-24
+              sm:[@media(min-height:900px)]:pt-20
+              lg:[@media(min-height:1000px)]:pt-24
+            "
+          >
             <div className="relative z-10 w-full max-w-6xl text-center">
               <motion.div
                 initial={{ y: 20, opacity: 0 }}
@@ -48,7 +63,6 @@ export default function Hero() {
                 transition={{ delay: 0.15, duration: 0.8 }}
               >
                 <div className="relative mx-auto w-fit max-w-full px-4 sm:px-8">
-                  
                   <div
                     aria-hidden="true"
                     className="pointer-events-none absolute -left-7 top-2 h-10 w-10 sm:-left-2 sm:top-0 sm:h-12 sm:w-12"
@@ -154,7 +168,6 @@ export default function Hero() {
                         lg:text-[2.55rem]
                       "
                     >
-                      
                       <div className="hidden w-full items-center justify-center gap-3 sm:gap-5 md:flex">
                         {mottoSteps.map((step, index) => {
                           const isVisible = index <= mottoStepIndex;
