@@ -1,6 +1,15 @@
 import { motion } from "motion/react";
 import { Link } from "react-router-dom";
-import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+  type PointerEvent as ReactPointerEvent,
+  type SyntheticEvent,
+} from "react";
 import { ChevronDown, ChevronUp, GripVertical, Instagram, Linkedin, Pencil, Plus, Trash2, X } from "lucide-react";
 import { buildAuthRequestInit } from "../auth/fetchWithAuth";
 import { useAuth } from "../context/AuthContext";
@@ -29,6 +38,390 @@ const createAvatar = (name: string, accent: string) => {
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240"><rect width="240" height="240" rx="40" fill="${accent}"/><circle cx="120" cy="96" r="46" fill="#fff7f2"/><path d="M56 196c12-34 42-52 64-52s52 18 64 52" fill="#fff7f2"/><text x="120" y="214" text-anchor="middle" font-family="Georgia, serif" font-size="26" fill="#7a1f2d">${label}</text></svg>`)}`;
 };
 
+type CropPoint = {
+  x: number;
+  y: number;
+};
+
+type ImageCropperModalProps = {
+  image: string;
+  onCancel: () => void;
+  onConfirm: (file: File, previewUrl: string) => void;
+};
+
+const OUTPUT_IMAGE_SIZE = 800;
+const MAX_ZOOM = 3;
+
+const createCroppedImageFile = async (
+  imageSrc: string,
+  crop: CropPoint,
+  zoom: number,
+  cropDiameter: number,
+  viewportSize: number,
+  naturalWidth: number,
+  naturalHeight: number,
+): Promise<Blob> => {
+  const image = new Image();
+
+  // Request CORS only when the source is actually cross-origin. Blob/data
+  // URLs and same-origin images can be drawn directly onto the canvas.
+  try {
+    const imageUrl = new URL(imageSrc, window.location.href);
+    if (imageUrl.origin !== window.location.origin) {
+      image.crossOrigin = "anonymous";
+    }
+  } catch {
+    // Browser-supported blob/data URLs do not need crossOrigin.
+  }
+
+  image.src = imageSrc;
+
+  await new Promise<void>((resolve, reject) => {
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error("Could not load the selected image."));
+  });
+
+  const baseScale = Math.max(
+    cropDiameter / naturalWidth,
+    cropDiameter / naturalHeight,
+  );
+  const scale = baseScale * zoom;
+  const displayedWidth = naturalWidth * scale;
+  const displayedHeight = naturalHeight * scale;
+  const left = (viewportSize - displayedWidth) / 2 + crop.x;
+  const top = (viewportSize - displayedHeight) / 2 + crop.y;
+
+  const sourceCropSize = viewportSize * 0.78;
+  const cropLeft = (viewportSize - sourceCropSize) / 2;
+  const cropTop = (viewportSize - sourceCropSize) / 2;
+
+  const sourceX = Math.max(
+    0,
+    Math.min(naturalWidth - sourceCropSize / scale, (cropLeft - left) / scale),
+  );
+  const sourceY = Math.max(
+    0,
+    Math.min(naturalHeight - sourceCropSize / scale, (cropTop - top) / scale),
+  );
+  const sourceSize = Math.min(
+    sourceCropSize / scale,
+    naturalWidth - sourceX,
+    naturalHeight - sourceY,
+  );
+
+  const canvas = document.createElement("canvas");
+  canvas.width = OUTPUT_IMAGE_SIZE;
+  canvas.height = OUTPUT_IMAGE_SIZE;
+
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("Could not create image canvas.");
+  }
+
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(
+    image,
+    sourceX,
+    sourceY,
+    sourceSize,
+    sourceSize,
+    0,
+    0,
+    OUTPUT_IMAGE_SIZE,
+    OUTPUT_IMAGE_SIZE,
+  );
+
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          resolve(blob);
+        } else {
+          reject(new Error("Could not create the cropped image."));
+        }
+      },
+      "image/jpeg",
+      0.92,
+    );
+  });
+};
+
+function ImageCropperModal({ image, onCancel, onConfirm }: ImageCropperModalProps) {
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const pointerIdRef = useRef<number | null>(null);
+  const lastPointerPositionRef = useRef<CropPoint>({ x: 0, y: 0 });
+
+  const [viewportSize, setViewportSize] = useState(0);
+  const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
+  const [crop, setCrop] = useState<CropPoint>({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const cropDiameter = viewportSize * 0.78;
+
+  const getBaseScale = useCallback(() => {
+    if (!cropDiameter || !naturalSize.width || !naturalSize.height) {
+      return 1;
+    }
+
+    return Math.max(
+      cropDiameter / naturalSize.width,
+      cropDiameter / naturalSize.height,
+    );
+  }, [cropDiameter, naturalSize.height, naturalSize.width]);
+
+  const clampCrop = useCallback(
+    (point: CropPoint, nextZoom = zoom): CropPoint => {
+      if (!viewportSize || !naturalSize.width || !naturalSize.height) {
+        return point;
+      }
+
+      const scale = getBaseScale() * nextZoom;
+      const displayedWidth = naturalSize.width * scale;
+      const displayedHeight = naturalSize.height * scale;
+
+      const maxX = Math.max(0, (displayedWidth - cropDiameter) / 2);
+      const maxY = Math.max(0, (displayedHeight - cropDiameter) / 2);
+
+      return {
+        x: Math.min(maxX, Math.max(-maxX, point.x)),
+        y: Math.min(maxY, Math.max(-maxY, point.y)),
+      };
+    },
+    [cropDiameter, getBaseScale, naturalSize.height, naturalSize.width, viewportSize, zoom],
+  );
+
+  useEffect(() => {
+    const element = viewportRef.current;
+    if (!element) return;
+
+    const updateSize = () => {
+      setViewportSize(element.getBoundingClientRect().width);
+    };
+
+    updateSize();
+
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(element);
+
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    setCrop((current) => clampCrop(current));
+  }, [clampCrop, viewportSize]);
+
+  const handleImageLoad = (event: SyntheticEvent<HTMLImageElement>) => {
+    const target = event.currentTarget;
+    setNaturalSize({ width: target.naturalWidth, height: target.naturalHeight });
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+  };
+
+  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (isProcessing || !naturalSize.width) return;
+
+    pointerIdRef.current = event.pointerId;
+    lastPointerPositionRef.current = { x: event.clientX, y: event.clientY };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setIsDragging(true);
+  };
+
+  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (pointerIdRef.current !== event.pointerId || isProcessing) return;
+
+    const last = lastPointerPositionRef.current;
+    const delta = {
+      x: event.clientX - last.x,
+      y: event.clientY - last.y,
+    };
+
+    lastPointerPositionRef.current = { x: event.clientX, y: event.clientY };
+    setCrop((current) => clampCrop({ x: current.x + delta.x, y: current.y + delta.y }));
+  };
+
+  const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (pointerIdRef.current === event.pointerId) {
+      pointerIdRef.current = null;
+      setIsDragging(false);
+    }
+  };
+
+  const handleZoomChange = (value: number) => {
+    setZoom(value);
+    setCrop((current) => clampCrop(current, value));
+  };
+
+  const handleConfirm = async () => {
+    if (!viewportSize || !naturalSize.width || !naturalSize.height || isProcessing) {
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      const blob = await createCroppedImageFile(
+        image,
+        crop,
+        zoom,
+        cropDiameter,
+        viewportSize,
+        naturalSize.width,
+        naturalSize.height,
+      );
+
+      const file = new File([blob], "profile-image.jpg", { type: "image/jpeg" });
+      const previewUrl = URL.createObjectURL(blob);
+      onConfirm(file, previewUrl);
+    } catch (error) {
+      console.error("Failed to crop image:", error);
+      window.alert("Unable to crop this image. Please try another image.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const baseScale = getBaseScale();
+  const displayedWidth = naturalSize.width * baseScale * zoom;
+  const displayedHeight = naturalSize.height * baseScale * zoom;
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-stone-950/80 p-3 backdrop-blur-sm sm:p-6"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="crop-image-title"
+    >
+      <div className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-brand-maroon/10 px-5 py-4 sm:px-7 sm:py-5">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-brand-maroon/45">
+              Profile picture
+            </p>
+            <h3 id="crop-image-title" className="mt-1 font-serif text-2xl text-brand-maroon sm:text-3xl">
+              Adjust image
+            </h3>
+            <p className="mt-1 max-w-xl text-xs leading-5 text-stone-500 sm:text-sm">
+              Drag the image and use the zoom slider until the face and head fit comfortably inside the circle.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isProcessing}
+            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-brand-maroon/15 bg-white px-3 py-2 text-sm font-semibold text-brand-maroon transition hover:bg-brand-maroon hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label="Close image cropper"
+          >
+            <X size={16} />
+            <span className="hidden sm:inline">Close</span>
+          </button>
+        </div>
+
+        <div className="overflow-y-auto px-4 py-5 sm:px-7 sm:py-6">
+          <div
+            ref={viewportRef}
+            className={`relative mx-auto aspect-square w-full max-w-[430px] overflow-hidden rounded-[1.5rem] bg-stone-950 select-none touch-none ${isDragging ? "cursor-grabbing" : "cursor-grab"}`}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            onPointerLeave={(event) => {
+              if (pointerIdRef.current === event.pointerId) {
+                handlePointerUp(event);
+              }
+            }}
+          >
+            {naturalSize.width > 0 && viewportSize > 0 && (
+              <img
+                src={image}
+                alt="Crop preview"
+                draggable={false}
+                onLoad={handleImageLoad}
+                className="pointer-events-none absolute max-w-none"
+                style={{
+                  width: displayedWidth,
+                  height: displayedHeight,
+                  left: "50%",
+                  top: "50%",
+                  transform: `translate(calc(-50% + ${crop.x}px), calc(-50% + ${crop.y}px))`,
+                }}
+              />
+            )}
+
+            <img
+              src={image}
+              alt=""
+              aria-hidden="true"
+              draggable={false}
+              onLoad={handleImageLoad}
+              className="pointer-events-none absolute inset-0 h-full w-full object-contain opacity-0"
+            />
+
+            <div className="pointer-events-none absolute inset-0">
+              <div className="absolute left-1/2 top-1/2 aspect-square w-[78%] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]" />
+              <div className="absolute left-1/2 top-1/2 h-px w-[78%] -translate-x-1/2 -translate-y-1/2 bg-white/20" />
+              <div className="absolute left-1/2 top-1/2 h-[78%] w-px -translate-x-1/2 -translate-y-1/2 bg-white/20" />
+            </div>
+
+            {!naturalSize.width && (
+              <div className="absolute inset-0 flex items-center justify-center text-sm text-white/70">
+                Loading image…
+              </div>
+            )}
+          </div>
+
+          <p className="mx-auto mt-3 max-w-[430px] text-center text-xs text-stone-500">
+            Everything inside the circle will be saved as the profile picture.
+          </p>
+
+          <div className="mx-auto mt-5 flex w-full max-w-[430px] items-center gap-3">
+            <span className="text-lg text-stone-500">−</span>
+            <input
+              type="range"
+              min="1"
+              max={MAX_ZOOM}
+              step="0.05"
+              value={zoom}
+              onChange={(event) => handleZoomChange(Number(event.target.value))}
+              className="h-2 w-full cursor-pointer accent-[#8b1d3b]"
+              aria-label="Image zoom"
+            />
+            <span className="text-lg font-semibold text-stone-500">+</span>
+          </div>
+
+          <div className="mx-auto mt-2 flex w-full max-w-[430px] justify-between text-[10px] font-semibold uppercase tracking-[0.2em] text-stone-400">
+            <span>Zoom out</span>
+            <span>Zoom in</span>
+          </div>
+        </div>
+
+        <div className="flex flex-col-reverse gap-3 border-t border-brand-maroon/10 bg-stone-50/70 px-5 py-4 sm:flex-row sm:justify-end sm:px-7">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isProcessing}
+            className="rounded-2xl border border-brand-maroon/15 bg-white px-5 py-3 font-semibold text-brand-maroon transition hover:bg-brand-maroon/5 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={isProcessing || !naturalSize.width}
+            className="rounded-2xl bg-brand-maroon px-5 py-3 font-semibold text-white transition hover:bg-stone-900 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isProcessing ? "Processing..." : "Crop & Use"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 export default function FoundersTeamPage() {
   const { user } = useAuth();
   const normalizedRole = user?.role?.toLowerCase();
@@ -40,11 +433,17 @@ export default function FoundersTeamPage() {
   const [loading, setLoading] = useState(true);
   const [showAddMemberForm, setShowAddMemberForm] = useState(false);
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
-  const [viewMoreByCategory, setViewMoreByCategory] = useState<Record<LeadershipCategory, boolean>>({ founders: false, currentBoard: false, previousBoard: false });
+  const [viewMoreByCategory, setViewMoreByCategory] = useState<Record<LeadershipCategory, boolean>>({ founders: true, currentBoard: true, previousBoard: true });
   const [draggedMemberId, setDraggedMemberId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  // Keep the original image separate from the cropped preview so the admin
+  // can adjust the same original image repeatedly before saving.
+  const [cropSourceImage, setCropSourceImage] = useState<string | null>(null);
+  const [cropImage, setCropImage] = useState<string | null>(null);
+  const [showCropper, setShowCropper] = useState(false);
+  const [isPreparingCropSource, setIsPreparingCropSource] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newMember, setNewMember] = useState({
     name: "",
@@ -112,6 +511,8 @@ export default function FoundersTeamPage() {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setShowAddMemberForm(false);
+        setShowCropper(false);
+        setCropImage(null);
       }
     };
 
@@ -123,11 +524,99 @@ export default function FoundersTeamPage() {
     fetchLeadershipMembers();
   }, []);
 
+  const isObjectUrl = (value: string | null): boolean => Boolean(value?.startsWith("blob:"));
+
+  const revokeObjectUrl = (value: string | null) => {
+    if (isObjectUrl(value)) {
+      URL.revokeObjectURL(value as string);
+    }
+  };
+
+  const prepareImageForCropping = async (source: string): Promise<string> => {
+    if (source.startsWith("blob:") || source.startsWith("data:")) {
+      return source;
+    }
+
+    try {
+      const sourceUrl = new URL(source, window.location.href);
+      const isCrossOrigin = sourceUrl.origin !== window.location.origin;
+
+      const response = isCrossOrigin
+        ? await fetch(source, { mode: "cors", credentials: "omit" })
+        : await fetch(source, buildAuthRequestInit({ method: "GET" }));
+
+      if (!response.ok) {
+        throw new Error(`Image request failed with status ${response.status}.`);
+      }
+
+      const blob = await response.blob();
+      if (!blob.type.startsWith("image/")) {
+        throw new Error("The server did not return a valid image.");
+      }
+
+      return URL.createObjectURL(blob);
+    } catch (error) {
+      console.error("Could not prepare existing image for cropping:", error);
+      return source;
+    }
+  };
+
+  const openCropper = async (source: string, sourceIsOriginal = true) => {
+    const cropSource = await prepareImageForCropping(source);
+
+    if (sourceIsOriginal) {
+      if (cropSourceImage && cropSourceImage !== cropSource && isObjectUrl(cropSourceImage)) {
+        revokeObjectUrl(cropSourceImage);
+      }
+      setCropSourceImage(cropSource);
+    }
+
+    setCropImage(cropSource);
+    setShowCropper(true);
+  };
+
   const handleImageSelect = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      window.alert("Please select a valid image file.");
+      event.target.value = "";
+      return;
+    }
+
+    // Every new upload becomes the ORIGINAL crop source. The cropped preview
+    // is never used as the source for a later adjustment.
+    const imageUrl = URL.createObjectURL(file);
+    revokeObjectUrl(cropSourceImage);
+    revokeObjectUrl(previewImage);
+
+    setUploadedFile(null);
+    setPreviewImage(null);
+    setIsPreparingCropSource(false);
+    setCropSourceImage(imageUrl);
+    setCropImage(imageUrl);
+    setShowCropper(true);
+    event.target.value = "";
+  };
+
+  const handleCropConfirm = (file: File, previewUrl: string) => {
+    // Keep cropSourceImage untouched. Re-cropping always starts from the
+    // original uploaded/existing image.
     setUploadedFile(file);
-    setPreviewImage(URL.createObjectURL(file));
+    setPreviewImage(previewUrl);
+    setShowCropper(false);
+    setCropImage(null);
+  };
+
+  const handleCropCancel = () => {
+    setShowCropper(false);
+    setCropImage(null);
+  };
+
+  const handleAdjustCrop = async () => {
+    if (!cropSourceImage || isPreparingCropSource) return;
+    await openCropper(cropSourceImage, false);
   };
 
   const handleAddMember = async (event: FormEvent) => {
@@ -199,7 +688,13 @@ export default function FoundersTeamPage() {
       setShowAddMemberForm(false);
       setEditingMemberId(null);
       setUploadedFile(null);
+      revokeObjectUrl(previewImage);
+      revokeObjectUrl(cropSourceImage);
       setPreviewImage(null);
+      setCropSourceImage(null);
+      setCropImage(null);
+      setIsPreparingCropSource(false);
+      setShowCropper(false);
       setNewMember({ name: "", role: "", tenure: "", bio: "", linkedinUrl: "", instagramUrl: "", category: "founders" });
 
       await fetchLeadershipMembers();
@@ -235,9 +730,20 @@ export default function FoundersTeamPage() {
       instagramUrl: member.instagramUrl ?? "",
       category: member.category,
     });
-    setPreviewImage(member.image);
     setUploadedFile(null);
+    setPreviewImage(member.image);
+    setCropImage(null);
     setShowAddMemberForm(true);
+
+    // Prepare the existing image as a local Blob URL so the browser can
+    // safely draw it onto a canvas when possible.
+    setIsPreparingCropSource(true);
+    try {
+      const preparedSource = await prepareImageForCropping(member.image);
+      setCropSourceImage(preparedSource);
+    } finally {
+      setIsPreparingCropSource(false);
+    }
   };
 
   const handleDeleteMember = async (memberId: string) => {
@@ -323,21 +829,176 @@ export default function FoundersTeamPage() {
   const founders = leadershipMembers.filter((member) => member.category === "founders").sort((a, b) => a.displayOrder - b.displayOrder);
   const currentBoard = leadershipMembers.filter((member) => member.category === "currentBoard").sort((a, b) => a.displayOrder - b.displayOrder);
   const previousBoard = leadershipMembers.filter((member) => member.category === "previousBoard").sort((a, b) => a.displayOrder - b.displayOrder);
-  const visibleMembers = (members: LeadershipMember[]) => members.slice(0, 4);
+  const visibleMembers = (members: LeadershipMember[]) => members;
+
+  const renderMemberGrid = (members: LeadershipMember[]) => (
+    <div className="grid grid-cols-2 gap-3 sm:gap-4 2xl:grid-cols-4">
+      {members.map((person) => {
+        const isDragged = draggedMemberId === person.id;
+        const isDropTarget = dropTargetId === person.id;
+        return (
+          <motion.article
+            key={person.id}
+            initial={{ y: 18, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            whileHover={{ y: -6, scale: 1.01, boxShadow: "0 18px 45px -25px rgba(91,63,212,0.35)" }}
+            transition={{ type: "spring", stiffness: 220, damping: 18 }}
+            draggable={isAdmin}
+            onDragStart={(event) => {
+              const dragEvent = event as unknown as { dataTransfer?: DataTransfer | null };
+              setDraggedMemberId(person.id);
+              setDropTargetId(person.id);
+              if (dragEvent.dataTransfer) {
+                dragEvent.dataTransfer.effectAllowed = "move";
+                dragEvent.dataTransfer.setData("application/ikshana-member-id", person.id);
+                dragEvent.dataTransfer.setData("text/plain", person.id);
+              }
+            }}
+            onDragEnter={(event) => { event.preventDefault(); setDropTargetId(person.id); }}
+            onDragOver={(event) => {
+              const dragEvent = event as unknown as { dataTransfer?: DataTransfer | null };
+              event.preventDefault();
+              if (dragEvent.dataTransfer) dragEvent.dataTransfer.dropEffect = "move";
+              setDropTargetId(person.id);
+            }}
+            onDrop={(event) => {
+              const dragEvent = event as unknown as { dataTransfer?: DataTransfer | null };
+              event.preventDefault();
+              event.stopPropagation();
+              const draggedId = dragEvent.dataTransfer
+                ? dragEvent.dataTransfer.getData("application/ikshana-member-id") || dragEvent.dataTransfer.getData("text/plain") || draggedMemberId
+                : draggedMemberId;
+              if (draggedId && draggedId !== person.id) handleReorderMembers(draggedId, person.id);
+              else { setDraggedMemberId(null); setDropTargetId(null); }
+            }}
+            onDragEnd={() => { setDraggedMemberId(null); setDropTargetId(null); }}
+            className={`flex h-full min-w-0 flex-col overflow-hidden rounded-[1.6rem] border border-brand-maroon/10 bg-white p-3 sm:p-5 shadow-[0_12px_35px_-18px_rgba(91,63,212,0.25)] transition-all ${isDragged ? "scale-[0.98] opacity-50" : ""} ${isDropTarget ? "border-[#5B3FD4] ring-2 ring-[#5B3FD4]/20" : ""} ${isAdmin ? "cursor-grab active:cursor-grabbing" : ""}`}
+          >
+            <div className="min-w-0">
+              {isAdmin && (
+                <div className="mb-3 flex items-center justify-end gap-2">
+                  <div className="flex items-center justify-center rounded-full border border-dashed border-[#5B3FD4]/20 bg-[#5B3FD4]/5 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#5B3FD4]">
+                    <GripVertical size={12} />
+                    Drag
+                  </div>
+                  <button type="button" onClick={() => handleEditMember(person)} className="rounded-full border border-brand-maroon/10 bg-white p-2 text-brand-maroon transition hover:bg-brand-maroon hover:text-white" title="Edit">
+                    <Pencil size={14} />
+                  </button>
+                  <button type="button" onClick={() => handleDeleteMember(person.id)} className="rounded-full border border-brand-maroon/10 bg-white p-2 text-brand-maroon transition hover:bg-brand-maroon hover:text-white" title="Delete">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              )}
+
+              <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+                <img
+                  src={person.image}
+                  alt={person.name}
+                  className="h-[80px] w-[80px] shrink-0 rounded-full border-4 border-[#5B3FD4]/10 object-cover shadow-lg sm:h-[110px] sm:w-[110px] lg:h-[135px] lg:w-[135px]"
+                />
+
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-semibold leading-5 text-brand-maroon sm:text-[17px] sm:leading-6">
+                    {person.name.trim().split(/\s+/).map((word, index) => (
+                      <span key={`${person.id}-name-${index}`} className="inline-block whitespace-nowrap">
+                        {word}{index < person.name.trim().split(/\s+/).length - 1 ? "\u00a0" : ""}
+                      </span>
+                    ))}
+                  </h3>
+                  <p className="mt-1 break-words text-sm font-semibold leading-5 text-[#2d1620]">{person.role}</p>
+                </div>
+              </div>
+            </div>
+
+            {person.bio ? (
+              <p className="mt-5 min-w-0 max-w-full break-words text-sm leading-6 text-brand-maroon/70 [overflow-wrap:anywhere]">
+                {person.bio}
+              </p>
+            ) : null}
+
+            <div className="mt-auto flex min-w-0 items-center justify-between gap-3 pt-6">
+              <div className="flex min-w-0 items-center gap-2 text-[#5B3FD4]">
+                {person.linkedinUrl && (
+                  <a href={normalizeSocialUrl(person.linkedinUrl)} target="_blank" rel="noreferrer" className="rounded-full border border-[#5B3FD4]/15 p-2 transition hover:bg-[#5B3FD4] hover:text-white" aria-label={`Visit ${person.name}'s LinkedIn`}>
+                    <Linkedin size={16} />
+                  </a>
+                )}
+                {person.instagramUrl && (
+                  <a href={normalizeSocialUrl(person.instagramUrl)} target="_blank" rel="noreferrer" className="rounded-full border border-[#5B3FD4]/15 p-2 transition hover:bg-[#5B3FD4] hover:text-white" aria-label={`Visit ${person.name}'s Instagram`}>
+                    <Instagram size={16} />
+                  </a>
+                )}
+              </div>
+              <span className="shrink-0 text-xs font-semibold uppercase tracking-[0.25em] text-brand-maroon/40">{person.tenure}</span>
+            </div>
+          </motion.article>
+        );
+      })}
+    </div>
+  );
+
+  const groupByTenure = (members: LeadershipMember[]) => {
+    const groups = new Map<string, LeadershipMember[]>();
+
+    members.forEach((member) => {
+      const tenure = member.tenure?.trim() || "Unspecified";
+      const existing = groups.get(tenure) ?? [];
+      existing.push(member);
+      groups.set(tenure, existing);
+    });
+
+    return Array.from(groups.entries()).sort(([a], [b]) =>
+      b.localeCompare(a, undefined, { numeric: true, sensitivity: "base" }),
+    );
+  };
+
+  const renderPreviousBoardByTenure = (members: LeadershipMember[]) => (
+    <div className="space-y-6">
+      {groupByTenure(members).map(([tenure, tenureMembers]) => (
+        <div key={tenure} className="space-y-4">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="h-[2px] flex-1 rounded-full bg-brand-maroon/20" />
+            <h3 className="shrink-0 whitespace-nowrap rounded-full border border-brand-maroon/15 bg-white px-4 py-2 font-sans text-xs font-bold uppercase tracking-wide text-brand-maroon shadow-sm sm:px-5 sm:py-2.5">
+              {tenure === "Unspecified" ? "BATCH" : `BATCH ${tenure}`}
+            </h3>
+            <div className="h-[2px] flex-1 rounded-full bg-brand-maroon/20" />
+          </div>
+
+          {renderMemberGrid(tenureMembers)}
+        </div>
+      ))}
+    </div>
+  );
 
   const toggleViewMore = (category: LeadershipCategory) => {
     setViewMoreByCategory((prev) => ({ ...prev, [category]: !prev[category] }));
   };
 
   return (
-    <section className="min-h-screen bg-[#fffcfc] px-4 py-24 sm:px-6 lg:px-8 xl:px-10 2xl:px-12">
+    <section
+      className={`min-h-screen bg-[#fffcfc] px-4 pb-24 ${
+        isAdmin ? "pt-20" : "pt-10"
+      } sm:px-6 lg:px-8 xl:px-10 2xl:px-12`}
+    >
       <div className="mx-auto flex max-w-7xl flex-col gap-8">
-        <div className="flex items-center justify-between gap-4">
+        <div className="mt-10 flex items-center justify-between gap-4 sm:mt-12">
           <div />
           {isAdmin && (
             <button
               type="button"
-              onClick={() => setShowAddMemberForm(true)}
+              onClick={() => {
+                setEditingMemberId(null);
+                setUploadedFile(null);
+                revokeObjectUrl(previewImage);
+                revokeObjectUrl(cropSourceImage);
+                setPreviewImage(null);
+                setCropSourceImage(null);
+                setCropImage(null);
+                setIsPreparingCropSource(false);
+                setShowCropper(false);
+                setNewMember({ name: "", role: "", tenure: "", bio: "", linkedinUrl: "", instagramUrl: "", category: "founders" });
+                setShowAddMemberForm(true);
+              }}
               className="inline-flex items-center gap-2 rounded-full bg-brand-maroon px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-brand-maroon/20 transition hover:bg-stone-900"
             >
               <Plus size={16} />
@@ -353,13 +1014,9 @@ export default function FoundersTeamPage() {
           className="rounded-[1.75rem] border border-brand-maroon/10 bg-white p-6 shadow-[0_30px_90px_-30px_rgba(91,63,212,0.28)] sm:p-8 lg:p-10"
         >
           <div className="mx-auto max-w-4xl text-center">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-[#5B3FD4]">Our Founders & Team</p>
             <h1 className="mt-3 text-4xl font-semibold tracking-tight text-brand-maroon sm:text-5xl">
-              The passionate individuals behind our mission and the driving force of change.
+              Our Founders & Team
             </h1>
-            <p className="mx-auto mt-4 max-w-2xl text-lg leading-8 text-brand-maroon/70">
-              Meet the people who lead with purpose, compassion, and a shared commitment to creating lasting impact.
-            </p>
           </div>
 
           <div className="mt-10 space-y-8">
@@ -369,7 +1026,20 @@ export default function FoundersTeamPage() {
               { key: "previousBoard", title: "Previous Board", subtitle: "Former leaders who helped shape our journey", members: previousBoard, emptyText: "previous board members" },
             ].map((section) => {
               const showAll = viewMoreByCategory[section.key as LeadershipCategory];
-              const visible = showAll ? section.members : section.members.slice(0, 4);
+
+              // Previous Board is grouped by tenure/batch.
+              // When collapsed, preview only the latest batch (up to 4 members).
+              // When expanded, show every batch and every member.
+              const latestPreviousBoardBatch =
+                section.key === "previousBoard"
+                  ? groupByTenure(section.members)[0]?.[1] ?? []
+                  : [];
+
+              const visible = showAll
+                ? section.members
+                : section.key === "previousBoard"
+                  ? latestPreviousBoardBatch.slice(0, 4)
+                  : section.members.slice(0, 4);
 
               return (
                 <section key={section.key} className="rounded-[1.5rem] border border-brand-maroon/10 bg-gradient-to-br from-[#fdfcff] via-white to-[#f6f2ff] p-4 shadow-[0_20px_60px_-30px_rgba(91,63,212,0.2)] sm:p-5">
@@ -384,7 +1054,11 @@ export default function FoundersTeamPage() {
                         onClick={() => toggleViewMore(section.key as LeadershipCategory)}
                         className="inline-flex items-center gap-2 rounded-full border border-[#5B3FD4]/20 bg-[#5B3FD4]/5 px-4 py-2 text-sm font-semibold text-[#5B3FD4] transition hover:bg-[#5B3FD4] hover:text-white"
                       >
-                        {showAll ? "Show Less" : "View More"}
+                        {showAll
+                          ? "Show Less"
+                          : section.key === "previousBoard"
+                            ? "View All Batches"
+                            : "View More"}
                         {showAll ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                       </button>
                     )}
@@ -395,108 +1069,9 @@ export default function FoundersTeamPage() {
                       No {section.emptyText} added yet.
                     </div>
                   ) : (
-                    <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
-                      {visible.map((person) => {
-                        const isDragged = draggedMemberId === person.id;
-                        const isDropTarget = dropTargetId === person.id;
-                        return (
-                          <motion.article
-                            key={person.id}
-                            initial={{ y: 18, opacity: 0 }}
-                            animate={{ y: 0, opacity: 1 }}
-                            whileHover={{ y: -6, scale: 1.01, boxShadow: "0 18px 45px -25px rgba(91,63,212,0.35)" }}
-                            transition={{ type: "spring", stiffness: 220, damping: 18 }}
-                            draggable={isAdmin}
-                            onDragStart={(event) => {
-                              const dragEvent = event as unknown as { dataTransfer?: DataTransfer | null };
-                              setDraggedMemberId(person.id);
-                              setDropTargetId(person.id);
-                              if (dragEvent.dataTransfer) {
-                                dragEvent.dataTransfer.effectAllowed = "move";
-                                dragEvent.dataTransfer.setData("application/ikshana-member-id", person.id);
-                                dragEvent.dataTransfer.setData("text/plain", person.id);
-                              }
-                            }}
-                            onDragEnter={(event) => {
-                              event.preventDefault();
-                              setDropTargetId(person.id);
-                            }}
-                            onDragOver={(event) => {
-                              const dragEvent = event as unknown as { dataTransfer?: DataTransfer | null };
-                              event.preventDefault();
-                              if (dragEvent.dataTransfer) {
-                                dragEvent.dataTransfer.dropEffect = "move";
-                              }
-                              setDropTargetId(person.id);
-                            }}
-                            onDrop={(event) => {
-                              const dragEvent = event as unknown as { dataTransfer?: DataTransfer | null };
-                              event.preventDefault();
-                              event.stopPropagation();
-                              const draggedId = dragEvent.dataTransfer
-                                ? dragEvent.dataTransfer.getData("application/ikshana-member-id") || dragEvent.dataTransfer.getData("text/plain") || draggedMemberId
-                                : draggedMemberId;
-                              if (draggedId && draggedId !== person.id) {
-                                handleReorderMembers(draggedId, person.id);
-                              } else {
-                                setDraggedMemberId(null);
-                                setDropTargetId(null);
-                              }
-                            }}
-                            onDragEnd={() => {
-                              setDraggedMemberId(null);
-                              setDropTargetId(null);
-                            }}
-                            className={`flex h-full min-h-[290px] flex-col rounded-[1.6rem] border border-brand-maroon/10 bg-white p-5 shadow-[0_12px_35px_-18px_rgba(91,63,212,0.25)] transition-all ${isDragged ? "scale-[0.98] opacity-50" : ""} ${isDropTarget ? "border-[#5B3FD4] ring-2 ring-[#5B3FD4]/20" : ""} ${isAdmin ? "cursor-grab active:cursor-grabbing" : ""}`}
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex items-center gap-4">
-                                <img src={person.image} alt={person.name} className="h-[140px] w-[140px] rounded-full border-4 border-[#5B3FD4]/10 object-cover shadow-lg sm:h-[152px] sm:w-[152px]" />
-                                <div className="min-w-0">
-                                  <h3 className="text-lg font-semibold text-brand-maroon">{person.name}</h3>
-                                  <p className="mt-1 text-sm font-semibold text-[#2d1620]">{person.role}</p>
-                                </div>
-                              </div>
-                              {isAdmin && (
-                                <div className="flex shrink-0 flex-col gap-2">
-                                  <div className="flex items-center justify-center rounded-full border border-dashed border-[#5B3FD4]/20 bg-[#5B3FD4]/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-[#5B3FD4]">
-                                    <GripVertical size={12} />
-                                    Drag
-                                  </div>
-                                  <button type="button" onClick={() => handleEditMember(person)} className="rounded-full border border-brand-maroon/10 p-2 text-brand-maroon transition hover:bg-brand-maroon hover:text-white" title="Edit">
-                                    <Pencil size={14} />
-                                  </button>
-                                  <button type="button" onClick={() => handleDeleteMember(person.id)} className="rounded-full border border-brand-maroon/10 p-2 text-brand-maroon transition hover:bg-brand-maroon hover:text-white" title="Delete">
-                                    <Trash2 size={14} />
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-
-                            {person.bio ? (
-                              <p className="mt-4 text-sm leading-6 text-brand-maroon/70">{person.bio}</p>
-                            ) : null}
-
-                            <div className="mt-5 flex items-center justify-between gap-3">
-                              <div className="flex items-center gap-2 text-[#5B3FD4]">
-                                {person.linkedinUrl && (
-                                  <a href={normalizeSocialUrl(person.linkedinUrl)} target="_blank" rel="noreferrer" className="rounded-full border border-[#5B3FD4]/15 p-2 transition hover:bg-[#5B3FD4] hover:text-white" aria-label={`Visit ${person.name}'s LinkedIn`}>
-                                    <Linkedin size={16} />
-                                  </a>
-                                )}
-                                {person.instagramUrl && (
-                                  <a href={normalizeSocialUrl(person.instagramUrl)} target="_blank" rel="noreferrer" className="rounded-full border border-[#5B3FD4]/15 p-2 transition hover:bg-[#5B3FD4] hover:text-white" aria-label={`Visit ${person.name}'s Instagram`}>
-                                    <Instagram size={16} />
-                                  </a>
-                                )}
-                              </div>
-                              <span className="text-xs font-semibold uppercase tracking-[0.25em] text-brand-maroon/40">{person.tenure}</span>
-                            </div>
-
-                          </motion.article>
-                        );
-                      })}
-                    </div>
+                    section.key === "previousBoard"
+                      ? renderPreviousBoardByTenure(visible)
+                      : renderMemberGrid(visible)
                   )}
                 </section>
               );
@@ -508,7 +1083,7 @@ export default function FoundersTeamPage() {
       {showAddMemberForm && isAdmin && (
         <div
           className="fixed inset-0 z-[120] flex items-center justify-center bg-stone-900/70 p-3 sm:p-4"
-          onClick={() => setShowAddMemberForm(false)}
+          onClick={() => { setShowAddMemberForm(false); setShowCropper(false); setCropImage(null); }}
         >
           <div
             className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[2rem] bg-white p-5 shadow-2xl sm:p-8"
@@ -521,7 +1096,7 @@ export default function FoundersTeamPage() {
               </div>
               <button
                 type="button"
-                onClick={() => setShowAddMemberForm(false)}
+                onClick={() => { setShowAddMemberForm(false); setShowCropper(false); setCropImage(null); }}
                 className="inline-flex items-center gap-2 rounded-full border border-brand-maroon/15 bg-white px-3 py-2 text-sm font-semibold text-brand-maroon transition hover:bg-brand-maroon hover:text-white"
                 aria-label="Close form"
               >
@@ -545,15 +1120,47 @@ export default function FoundersTeamPage() {
               <input value={newMember.linkedinUrl} onChange={(event) => setNewMember({ ...newMember, linkedinUrl: event.target.value })} placeholder="LinkedIn URL (optional)" className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3" />
               <input value={newMember.instagramUrl} onChange={(event) => setNewMember({ ...newMember, instagramUrl: event.target.value })} placeholder="Instagram URL (optional)" className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3" />
               <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                <label className="mb-2 block text-sm font-semibold text-brand-maroon">Upload image</label>
-                <input type="file" accept="image/*" onChange={handleImageSelect} className="w-full text-sm text-stone-500" />
-                {previewImage && <img src={previewImage} alt="Preview" className="mt-3 h-24 w-24 rounded-full border-4 border-brand-maroon/10 object-cover" />}
+                <label className="mb-2 block text-sm font-semibold text-brand-maroon">Profile image</label>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  onChange={handleImageSelect}
+                  className="w-full text-sm text-stone-500"
+                />
+
+                {previewImage && (
+                  <div className="mt-4 flex flex-wrap items-center gap-4">
+                    <div>
+                      <p className="mb-2 text-xs font-medium text-stone-500">Profile preview</p>
+                      <img
+                        src={previewImage}
+                        alt="Profile preview"
+                        className="h-28 w-28 rounded-full border-4 border-brand-maroon/10 object-cover shadow-lg"
+                      />
+                    </div>
+
+                    {cropSourceImage && (
+                      <button
+                        type="button"
+                        onClick={handleAdjustCrop}
+                        disabled={isPreparingCropSource}
+                        className="rounded-full border border-brand-maroon/15 bg-white px-4 py-2 text-sm font-semibold text-brand-maroon transition hover:bg-brand-maroon hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {isPreparingCropSource ? "Preparing image..." : "Adjust Crop"}
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
               <textarea value={newMember.bio} onChange={(event) => setNewMember({ ...newMember, bio: event.target.value })} placeholder="Short bio" className="min-h-24 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3" />
               <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
                 <button
                   type="button"
-                  onClick={() => setShowAddMemberForm(false)}
+                  onClick={() => {
+                    setShowAddMemberForm(false);
+                    setShowCropper(false);
+                    setCropImage(null);
+                  }}
                   className="rounded-2xl border border-brand-maroon/15 px-4 py-3 font-semibold text-brand-maroon transition hover:bg-brand-maroon/5"
                 >
                   Cancel
@@ -569,6 +1176,14 @@ export default function FoundersTeamPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {showCropper && cropImage && isAdmin && (
+        <ImageCropperModal
+          image={cropImage}
+          onCancel={handleCropCancel}
+          onConfirm={handleCropConfirm}
+        />
       )}
     </section>
   );

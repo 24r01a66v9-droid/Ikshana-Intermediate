@@ -26,6 +26,7 @@ import ReviewsPage from "./pages/ReviewsPage";
 import SupportUsPage from "./pages/SupportUsPage";
 import FoundersTeamPage from "./pages/FoundersTeamPage";
 import ResetPasswordPage from "./components/ResetPasswordPage";
+import SocialConnect from "./components/SocialConnect";
 
 export default function App() {
   function RequireAdmin({ children }: { children: ReactNode }) {
@@ -57,6 +58,7 @@ export default function App() {
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
               </Routes>
             </main>
+            <SocialConnect />
             <Footer />
           </div>
         </BrowserRouter>

@@ -1,106 +1,346 @@
 import { motion } from "motion/react";
-import { Heart, ImageIcon } from "lucide-react";
-import { useState, useEffect } from "react";
-import { useAuth } from "../context/AuthContext";
-import Logo from "./Logo";
-
-const STORAGE_KEY = "ikshana-leadership-members";
-const LEADERSHIP_RESET_KEY = "ikshana-leadership-reset-complete";
+import { ArrowRight, Heart, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
 
 export default function Hero() {
-  const { user } = useAuth();
-  const normalizedRole = user?.role?.toLowerCase();
-  const isAdmin = Boolean(
-    normalizedRole === "admin" ||
-    (user?.email && user.email === "24r01a66v9@cmrithyderabad.edu.in")
-  );
-  const [heroImage, setHeroImage] = useState<string | null>(null);
+  // Reveal the motto as 3 complete text parts.
+  // Each part appears at once; the + and = symbols are shown between them.
+  const mottoSteps = [
+    "your little help",
+    "our passion to help",
+    "someone's hope",
+  ];
+
+  const [mottoStepIndex, setMottoStepIndex] = useState(0);
 
   useEffect(() => {
-    const fetchHeroImage = async () => {
-      try {
-        const response = await fetch("/api/photos?category=hero");
-        if (response.ok) {
-          const data = await response.json();
-          const featured = data.find((p: any) => p.is_featured);
-          if (featured) setHeroImage(featured.url);
-        }
-      } catch (e) {
-        console.error("Failed to fetch hero image", e);
-      }
-    };
+    const timer = window.setTimeout(() => {
+      setMottoStepIndex((previous) => (previous + 1) % mottoSteps.length);
+    }, 700);
 
-    if (!window.localStorage.getItem(LEADERSHIP_RESET_KEY)) {
-      window.localStorage.removeItem(STORAGE_KEY);
-      window.localStorage.setItem(LEADERSHIP_RESET_KEY, "true");
-    }
-
-    fetchHeroImage();
-  }, []);
+    return () => window.clearTimeout(timer);
+  }, [mottoStepIndex]);
 
   return (
-    <section className="relative min-h-screen flex flex-col lg:flex-row items-stretch overflow-hidden bg-[#fffcfc]">
-      {/* Content Side */}
-      <div className="flex-1 flex flex-col justify-center px-3 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 py-20 sm:py-24 lg:py-28 relative z-10 bg-[#fffcfc]">
-        <div className="absolute top-0 left-0 w-full h-2 bg-brand-maroon" />
-        <motion.div 
-          initial={{ x: -50, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          transition={{ duration: 0.8 }}
-          className="mb-12 flex items-center gap-4"
-        >
-          <Logo className="w-20 h-20" />
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-serif font-black tracking-[0.15em] text-brand-maroon leading-none">IKSHANA</h1>
-            <p className="text-[10px] uppercase tracking-[0.45em] text-brand-maroon/45 font-bold mt-1">Foundation</p>
-          </div>
-        </motion.div>
+    <section className="relative overflow-hidden bg-[#fffcfc]">
+      <div className="mx-auto w-[94%] max-w-7xl px-1 sm:px-2 lg:px-4">
+        <div className="relative min-h-[calc(100vh-110px)] overflow-hidden rounded-b-[2.5rem]">
+          <div className="absolute left-0 top-0 h-1.5 w-full bg-brand-maroon/75" />
 
-        <motion.div
-          initial={{ y: 30, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.3, duration: 0.8 }}
-          className="w-full"
-        >
-          <div className="inline-flex items-center gap-3 px-4 py-2 bg-brand-maroon text-white rounded-full text-[10px] font-bold tracking-[0.3em] uppercase mb-10 shadow-xl shadow-brand-maroon/20">
-            <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-            Student Led Organization
+          <div className="flex min-h-[calc(100vh-110px)] items-center justify-center py-24 sm:py-28 lg:py-32">
+            <div className="relative z-10 w-full max-w-6xl text-center">
+              <motion.div
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ duration: 0.65 }}
+                className="mx-auto mb-9 inline-flex items-center gap-2.5 rounded-full border border-brand-maroon/15 bg-white px-4 py-2.5 shadow-sm sm:mb-11"
+              >
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-maroon text-white">
+                  <Heart size={13} fill="currentColor" />
+                </span>
+
+                <span className="text-[9px] font-bold uppercase tracking-[0.28em] text-brand-maroon sm:text-[10px]">
+                  Student-led organization
+                </span>
+              </motion.div>
+
+              <motion.div
+                initial={{ y: 30, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.15, duration: 0.8 }}
+              >
+                <div className="relative mx-auto w-fit max-w-full px-4 sm:px-8">
+                  {/* Small hand-drawn style accent */}
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute -left-7 top-2 h-10 w-10 sm:-left-2 sm:top-0 sm:h-12 sm:w-12"
+                  >
+                    <span className="absolute left-0 top-5 h-5 w-1 rotate-[-35deg] rounded-full bg-brand-maroon/20 sm:h-10 sm:w-1.5" />
+                    <span className="absolute left-3 top-2 h-4 w-1 rotate-[-18deg] rounded-full bg-brand-maroon/20 sm:left-5 sm:top-0 sm:h-8 sm:w-1.5" />
+                    <span className="absolute left-6 top-0 h-3.5 w-1 rotate-[8deg] rounded-full bg-brand-maroon/20 sm:left-10 sm:top-[-4px] sm:h-6 sm:w-1.5" />
+                  </div>
+
+                  <h1
+                    className="
+                      font-serif
+                      font-light
+                      leading-[0.88]
+                      tracking-[-0.045em]
+                      text-brand-maroon
+                      text-[3.35rem]
+                      max-[380px]:text-[2.95rem]
+                      sm:text-[4.7rem]
+                      md:text-[5.8rem]
+                      lg:text-[6.25rem]
+                      xl:text-[7rem]
+                      2xl:text-[7.5rem]
+                    "
+                  >
+                    <span className="block whitespace-nowrap">
+                      Supporting{" "}
+                      <span className="relative inline-block italic">
+                        Lives
+                        <span
+                          aria-hidden="true"
+                          className="
+                            absolute
+                            bottom-[0.02em]
+                            left-0
+                            h-[0.055em]
+                            w-full
+                            rounded-full
+                            bg-brand-maroon/20
+                          "
+                        />
+                      </span>
+                      ,
+                    </span>
+
+                    <span className="relative mt-2 block whitespace-nowrap italic sm:mt-1">
+                      Spreading Hope
+                      <span
+                        aria-hidden="true"
+                        className="
+                          absolute
+                          -right-5
+                          bottom-[0.08em]
+                          h-2.5
+                          w-2.5
+                          rounded-full
+                          bg-brand-maroon/25
+                          sm:h-3
+                          sm:w-3
+                        "
+                      />
+                    </span>
+                  </h1>
+
+                  {/* Subtle dotted flourish */}
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute -right-2 bottom-0 h-10 w-14 sm:-right-5 sm:h-16 sm:w-24"
+                  >
+                    <div className="absolute right-0 top-0 h-2.5 w-2.5 rounded-full bg-brand-maroon/20 sm:h-3 sm:w-3" />
+                    <div className="absolute right-0 top-3 h-7 w-12 rounded-br-[2rem] border-b-2 border-r-2 border-dashed border-brand-maroon/15 sm:right-2 sm:top-4 sm:h-12 sm:w-20 sm:rounded-br-[3rem]" />
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Motto */}
+              <motion.div
+                initial={{ y: 24, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.35, duration: 0.7 }}
+                className="mx-auto mt-10 w-full max-w-6xl sm:mt-12"
+              >
+                <div className="relative mx-auto w-full overflow-hidden rounded-[1.75rem] border border-brand-maroon/10 bg-white px-4 py-5 text-left shadow-[0_18px_55px_rgba(112,0,0,0.07)] sm:px-8 sm:py-8 lg:px-10 lg:py-9">
+                  <div className="absolute left-0 top-0 h-full w-1.5 bg-brand-maroon" />
+
+                  <div className="min-w-0 pl-3 sm:pl-4">
+                    <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.3em] text-brand-maroon/75 sm:mb-4 sm:text-sm">
+                      <Sparkles size={13} />
+                      Our motto
+                    </div>
+
+                    <div
+                      aria-live="polite"
+                      className="
+                        w-full
+                        font-serif
+                        text-[1.65rem]
+                        font-medium
+                        italic
+                        leading-[1.15]
+                        text-brand-maroon
+                        max-[380px]:text-[1.48rem]
+                        sm:text-2xl
+                        md:text-[2.15rem]
+                        lg:text-[2.55rem]
+                      "
+                    >
+                      {/* Desktop/tablet: keep the complete motto on one line. */}
+                      <div className="hidden w-full items-center justify-center gap-3 sm:gap-5 md:flex">
+                        {mottoSteps.map((step, index) => {
+                          const isVisible = index <= mottoStepIndex;
+
+                          return (
+                            <div key={step} className="flex shrink-0 items-center gap-3 sm:gap-5">
+                              <motion.span
+                                initial={false}
+                                animate={{
+                                  opacity: isVisible ? 1 : 0,
+                                  y: isVisible ? 0 : 8,
+                                }}
+                                transition={{ duration: 0.2 }}
+                                className={`inline-block ${
+                                  isVisible ? "visible" : "invisible"
+                                }`}
+                              >
+                                {step}
+                              </motion.span>
+
+                              {index < mottoSteps.length - 1 && (
+                                <motion.span
+                                  aria-hidden="true"
+                                  initial={false}
+                                  animate={{
+                                    opacity: index < mottoStepIndex ? 1 : 0,
+                                    scale: index < mottoStepIndex ? 1 : 0.8,
+                                  }}
+                                  transition={{ duration: 0.2 }}
+                                  className="shrink-0 not-italic font-normal"
+                                >
+                                  {index === 0 ? "+" : "="}
+                                </motion.span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Mobile: use two lines so the complete motto always fits.
+                          The final "= someone's hope" moves to the second line. */}
+                      <div className="flex w-full flex-col items-center justify-center gap-3 px-1 text-center md:hidden">
+                        <div className="flex w-full flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
+                          <motion.span
+                            initial={false}
+                            animate={{
+                              opacity: mottoStepIndex >= 0 ? 1 : 0,
+                              y: mottoStepIndex >= 0 ? 0 : 8,
+                            }}
+                            transition={{ duration: 0.2 }}
+                            className="shrink-0"
+                          >
+                            {mottoSteps[0]}
+                          </motion.span>
+
+                          <motion.span
+                            aria-hidden="true"
+                            initial={false}
+                            animate={{
+                              opacity: mottoStepIndex >= 1 ? 1 : 0,
+                              scale: mottoStepIndex >= 1 ? 1 : 0.8,
+                            }}
+                            transition={{ duration: 0.2 }}
+                            className={`shrink-0 not-italic ${
+                              mottoStepIndex >= 1 ? "visible" : "invisible"
+                            }`}
+                          >
+                            +
+                          </motion.span>
+
+                          <motion.span
+                            initial={false}
+                            animate={{
+                              opacity: mottoStepIndex >= 1 ? 1 : 0,
+                              y: mottoStepIndex >= 1 ? 0 : 8,
+                            }}
+                            transition={{ duration: 0.2 }}
+                            className={`shrink-0 ${
+                              mottoStepIndex >= 1 ? "visible" : "invisible"
+                            }`}
+                          >
+                            {mottoSteps[1]}
+                          </motion.span>
+                        </div>
+
+                        <div className="flex w-full items-center justify-center gap-3 max-[380px]:gap-2">
+                          <motion.span
+                            aria-hidden="true"
+                            initial={false}
+                            animate={{
+                              opacity: mottoStepIndex >= 2 ? 1 : 0,
+                              scale: mottoStepIndex >= 2 ? 1 : 0.8,
+                            }}
+                            transition={{ duration: 0.2 }}
+                            className={`shrink-0 not-italic ${
+                              mottoStepIndex >= 2 ? "visible" : "invisible"
+                            }`}
+                          >
+                            =
+                          </motion.span>
+
+                          <motion.span
+                            initial={false}
+                            animate={{
+                              opacity: mottoStepIndex >= 2 ? 1 : 0,
+                              y: mottoStepIndex >= 2 ? 0 : 8,
+                            }}
+                            transition={{ duration: 0.2 }}
+                            className={`shrink-0 ${
+                              mottoStepIndex >= 2 ? "visible" : "invisible"
+                            }`}
+                          >
+                            {mottoSteps[2]}
+                          </motion.span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex items-center justify-center gap-1.5 sm:mt-4">
+                      {mottoSteps.map((_, index) => (
+                        <span
+                          key={index}
+                          aria-hidden="true"
+                          className={`h-1.5 rounded-full transition-all duration-300 sm:h-2 ${
+                            index <= mottoStepIndex
+                              ? "w-6 bg-brand-maroon"
+                              : "w-1.5 bg-brand-maroon/15"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Description */}
+              <motion.p
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.5, duration: 0.7 }}
+                className="mx-auto mt-8 max-w-4xl text-center font-serif text-lg font-medium italic leading-relaxed text-brand-maroon/80 sm:mt-9 sm:text-xl lg:text-[1.4rem] xl:text-[1.5rem]"
+              >
+                Ikshana is a community-driven social service initiative dedicated
+                to supporting those who need it most through compassion and
+                responsibility.
+              </motion.p>
+
+              {/* Actions */}
+              <motion.div
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.6, duration: 0.7 }}
+                className="mt-10 flex flex-col items-center justify-center gap-3 sm:mt-12 sm:flex-row sm:flex-wrap sm:gap-4 lg:flex-nowrap"
+              >
+                <a
+                  href="/about"
+                  className="inline-flex h-14 w-full items-center justify-center gap-3 rounded-2xl border border-brand-maroon/20 bg-white px-7 text-[10px] font-bold uppercase tracking-[0.22em] text-brand-maroon transition-all hover:border-brand-maroon hover:bg-brand-maroon hover:text-white sm:w-auto sm:min-w-[140px]"
+                >
+                  About
+                  <ArrowRight size={15} />
+                </a>
+
+                <a
+                  href="/careers"
+                  className="inline-flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-brand-maroon px-7 text-[10px] font-bold uppercase tracking-[0.22em] text-white shadow-xl shadow-brand-maroon/20 transition-all hover:-translate-y-0.5 hover:bg-stone-900 sm:w-auto sm:min-w-[220px]"
+                >
+                  Join Our Community
+                  <ArrowRight size={15} />
+                </a>
+
+                <a
+                  href="/sponsors"
+                  className="inline-flex h-14 w-full items-center justify-center gap-3 rounded-2xl border border-brand-maroon/20 bg-white px-7 text-[10px] font-bold uppercase tracking-[0.22em] text-brand-maroon transition-all hover:border-brand-maroon hover:bg-brand-maroon hover:text-white sm:w-auto sm:min-w-[190px]"
+                >
+                  Support Our Cause
+                  <ArrowRight size={15} />
+                </a>
+              </motion.div>
+            </div>
           </div>
-          <h2 className="text-7xl md:text-9xl font-serif font-light leading-[0.85] mb-10 tracking-tighter text-brand-maroon">
-            Supporting <br />
-            <span className="italic font-medium text-brand-maroon underline underline-offset-8 decoration-brand-maroon/20">Lives,</span> <br />
-            Spreading Hope.
-          </h2>
-          <p className="text-brand-maroon font-serif italic text-3xl mb-12 opacity-90 border-l-8 border-brand-maroon pl-8 leading-tight">
-            "your little help + our passion to help = someone's hope"
-          </p>
-          <p className="text-brand-maroon/70 text-xl mb-14 leading-relaxed font-serif italic">
-            Ikshana is a community-driven social service initiative dedicated to supporting those who need it most through compassion and responsibility.
-          </p>
-          
-          <div className="flex flex-col sm:flex-row items-center gap-8">
-            <a href="/about" className="w-full sm:w-auto px-12 py-6 border-2 border-brand-maroon/20 text-brand-maroon rounded-2xl font-bold tracking-widest uppercase text-[10px] hover:bg-brand-maroon hover:border-brand-maroon hover:text-white active:bg-brand-maroon active:text-white transition-all flex items-center justify-center">
-              About
-            </a>
-            <a href="/careers" className="w-full sm:w-auto px-12 py-6 bg-brand-maroon text-white rounded-2xl font-bold tracking-widest uppercase text-[10px] hover:bg-stone-900 hover:scale-105 active:bg-brand-maroon transition-all flex items-center justify-center shadow-2xl shadow-brand-maroon/30">
-              Join Our Community
-            </a>
-            <a href="/sponsors" className="w-full sm:w-auto px-12 py-6 border-2 border-brand-maroon/20 text-brand-maroon rounded-2xl font-bold tracking-widest uppercase text-[10px] hover:bg-brand-maroon hover:border-brand-maroon hover:text-white active:bg-brand-maroon active:text-white transition-all flex items-center justify-center">
-              Support Our Cause
-            </a>
-          </div>
-        </motion.div>
+        </div>
       </div>
-
-      {/* Image Side */}
-      <motion.div 
-        initial={{ x: 100, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-        transition={{ duration: 1, ease: "easeOut" }}
-        className="flex-1 hidden lg:block overflow-hidden"
-      />
-
-      {/* Removed vertical 'Scroll' label on left side as requested */}
     </section>
   );
 }
