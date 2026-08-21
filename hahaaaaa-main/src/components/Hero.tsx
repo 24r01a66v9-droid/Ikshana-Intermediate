@@ -22,23 +22,24 @@ export default function Hero() {
   return (
     <section className="relative overflow-hidden bg-[#fffcfc]">
       <div className="mx-auto w-[94%] max-w-7xl px-1 sm:px-2 lg:px-4">
-        <div className="relative min-h-[calc(100svh-110px)] overflow-hidden rounded-b-[2.5rem]">
+        <div className="relative overflow-hidden rounded-b-[2.5rem] md:min-h-[calc(100svh-110px)]">
           <div className="absolute left-0 top-0 h-1.5 w-full bg-brand-maroon/75" />
 
           <div
             className="
               flex
-              min-h-[calc(100svh-110px)]
-              items-center
               justify-center
-              py-24
-              sm:py-28
-              lg:py-32
-              [@media(min-height:800px)]:items-start
-              [@media(min-height:800px)]:pt-14
-              [@media(min-height:800px)]:pb-24
-              sm:[@media(min-height:900px)]:pt-20
-              lg:[@media(min-height:1000px)]:pt-24
+              px-0
+              pt-24
+              pb-16
+              md:min-h-[calc(100svh-110px)]
+              md:items-center
+              md:py-24
+              lg:py-28
+              xl:py-32
+              [@media(min-width:768px)_and_(min-height:900px)]:items-start
+              [@media(min-width:768px)_and_(min-height:900px)]:pt-16
+              [@media(min-width:1024px)_and_(min-height:1000px)]:pt-20
             "
           >
             <div className="relative z-10 w-full max-w-6xl text-center">
@@ -46,7 +47,7 @@ export default function Hero() {
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ duration: 0.65 }}
-                className="mx-auto mb-9 inline-flex items-center gap-2.5 rounded-full border border-brand-maroon/15 bg-white px-4 py-2.5 shadow-sm sm:mb-11"
+                className="mx-auto mb-2 inline-flex items-center gap-2.5 rounded-full border border-brand-maroon/15 bg-white px-4 py-2.5 shadow-sm md:mb-9 lg:mb-11"
               >
                 <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-maroon text-white">
                   <Heart size={13} fill="currentColor" />
@@ -63,6 +64,7 @@ export default function Hero() {
                 transition={{ delay: 0.15, duration: 0.8 }}
               >
                 <div className="relative mx-auto w-fit max-w-full px-4 sm:px-8">
+
                   <div
                     aria-hidden="true"
                     className="pointer-events-none absolute -left-7 top-2 h-10 w-10 sm:-left-2 sm:top-0 sm:h-12 sm:w-12"
@@ -168,6 +170,7 @@ export default function Hero() {
                         lg:text-[2.55rem]
                       "
                     >
+
                       <div className="hidden w-full items-center justify-center gap-3 sm:gap-5 md:flex">
                         {mottoSteps.map((step, index) => {
                           const isVisible = index <= mottoStepIndex;
