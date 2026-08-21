@@ -22,7 +22,13 @@ export default function Hero() {
   return (
     <section className="relative overflow-hidden bg-[#fffcfc]">
       <div className="mx-auto w-[94%] max-w-7xl px-1 sm:px-2 lg:px-4">
-        <div className="relative overflow-hidden rounded-b-[2.5rem] md:min-h-[calc(100svh-110px)]">
+        <div className="
+          relative
+          overflow-hidden
+          rounded-b-[2.5rem]
+          md:min-h-[calc(100svh-110px)]
+          [@media(orientation:portrait)]:min-h-0
+        ">
           <div className="absolute left-0 top-0 h-1.5 w-full bg-brand-maroon/75" />
 
           <div
@@ -30,16 +36,17 @@ export default function Hero() {
               flex
               justify-center
               px-0
-              pt-24
+              pt-28
               pb-16
               md:min-h-[calc(100svh-110px)]
               md:items-center
               md:py-24
               lg:py-28
               xl:py-32
-              [@media(min-width:768px)_and_(min-height:900px)]:items-start
-              [@media(min-width:768px)_and_(min-height:900px)]:pt-16
-              [@media(min-width:1024px)_and_(min-height:1000px)]:pt-20
+              [@media(orientation:portrait)]:min-h-0
+              [@media(orientation:portrait)]:items-start
+              [@media(orientation:portrait)]:pt-28
+              [@media(orientation:portrait)]:pb-16
             "
           >
             <div className="relative z-10 w-full max-w-6xl text-center">
@@ -47,7 +54,7 @@ export default function Hero() {
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ duration: 0.65 }}
-                className="mx-auto mb-2 inline-flex items-center gap-2.5 rounded-full border border-brand-maroon/15 bg-white px-4 py-2.5 shadow-sm md:mb-9 lg:mb-11"
+                className="mx-auto mb-2 inline-flex items-center gap-2.5 rounded-full border border-brand-maroon/15 bg-white px-4 py-2.5 shadow-sm md:mb-9 lg:mb-11 [@media(orientation:portrait)]:mb-5"
               >
                 <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-maroon text-white">
                   <Heart size={13} fill="currentColor" />
