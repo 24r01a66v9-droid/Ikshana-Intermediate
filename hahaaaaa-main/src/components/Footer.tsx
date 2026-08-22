@@ -25,7 +25,7 @@ export default function Footer() {
       </div>
 
       <div className="relative z-10 mx-auto max-w-7xl">
-        <div className="grid gap-10 lg:grid-cols-[1.25fr_1fr_1fr] lg:gap-12 xl:gap-20">
+        <div className="grid gap-10 md:gap-12 lg:grid-cols-[1.25fr_1fr_1fr] lg:gap-12 xl:gap-20">
           <section>
             <div className="flex items-center gap-4 sm:gap-5">
               <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[1.2rem] bg-white shadow-xl sm:h-[4.5rem] sm:w-[4.5rem]">
@@ -64,7 +64,7 @@ export default function Footer() {
               </h2>
             </div>
 
-            <nav className="grid grid-cols-2 gap-2.5">
+            <nav className="grid grid-cols-2 gap-2.5 md:grid-cols-3 lg:grid-cols-2">
               {quickLinks.map((link) => (
                 <a
                   key={link.href}
@@ -91,7 +91,7 @@ export default function Footer() {
               </h2>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-3 md:grid md:grid-cols-2 md:gap-3 md:space-y-0 lg:block lg:space-y-3">
               <a
                 href="mailto:ikshana.4foundation@gmail.com"
                 className="group flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.05] p-3.5 transition-all hover:border-white/25 hover:bg-white/[0.1]"
@@ -123,7 +123,7 @@ export default function Footer() {
                 </span>
               </div>
 
-              <div className="pt-2">
+              <div className="pt-2 md:col-span-2 lg:col-span-1">
                 <p className="text-[9px] font-bold uppercase tracking-[0.28em] text-white/65">
                   Follow Ikshana
                 </p>

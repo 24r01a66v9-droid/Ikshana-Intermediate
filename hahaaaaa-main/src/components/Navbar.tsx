@@ -94,14 +94,14 @@ export default function Navbar() {
           </Link>
 
           {/* Desktop navigation - shown only when there is enough space */}
-          <div className="hidden flex-1 items-center justify-center xl:flex">
-            <div className="flex items-center gap-5 2xl:gap-7">
+          <div className="hidden flex-1 items-center justify-center lg:flex">
+            <div className="flex items-center gap-3 xl:gap-5 2xl:gap-7">
               {navItems.map((item) => (
                 <Link
                   key={item.name}
                   to={item.path}
                   aria-current={isActive(item.path) ? "page" : undefined}
-                  className={`group flex shrink-0 items-center text-sm font-medium transition-colors ${
+                  className={`group flex shrink-0 items-center text-xs font-medium transition-colors lg:text-sm ${
                     isActive(item.path)
                       ? "text-brand-maroon"
                       : "text-brand-maroon/80 hover:text-brand-maroon"
@@ -123,7 +123,7 @@ export default function Navbar() {
           </div>
 
           {/* Desktop authentication */}
-          <div className="hidden shrink-0 items-center gap-4 xl:flex">
+          <div className="hidden shrink-0 items-center gap-2 xl:gap-4 lg:flex">
             <div className="h-6 w-px bg-brand-maroon/10" />
 
             {user ? (
@@ -166,7 +166,7 @@ export default function Navbar() {
           </div>
 
           {/* Compact navigation for tablet/mobile */}
-          <div className="flex items-center gap-2 xl:hidden">
+          <div className="flex items-center gap-2 lg:hidden">
             {user && (
               <div className="hidden items-center sm:flex">
                 <span className="text-xs font-medium text-brand-maroon/70">
